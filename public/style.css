@@ -386,3 +386,203 @@ body {
 .start-test-btn:hover { background: var(--primary-light); }
 
 .error-msg { color: #c0392b; font-weight: bold; }
+
+/* ===== ANIMATIONS ===== */
+
+/* Fade-in and slide-up for content page */
+@keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Fade-in only */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Slide in from right */
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(40px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* Scale pop */
+@keyframes scalePop {
+    0% { opacity: 0; transform: scale(0.8); }
+    70% { transform: scale(1.05); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+/* Typing cursor blink */
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* Stagger children animation */
+@keyframes staggerIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Pulse glow for loading */
+@keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 5px rgba(26, 86, 50, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(26, 86, 50, 0.6); }
+}
+
+/* Content page animation */
+.content-page { animation: fadeSlideUp 0.4s ease-out; }
+
+/* Language selector buttons */
+.lang-btn { animation: scalePop 0.4s ease-out both; }
+.lang-btn:nth-child(1) { animation-delay: 0.1s; }
+.lang-btn:nth-child(2) { animation-delay: 0.2s; }
+.lang-btn:nth-child(3) { animation-delay: 0.3s; }
+
+/* Tabs animation */
+.tabs { animation: fadeSlideUp 0.3s ease-out; }
+
+/* Notes content - animated appearance */
+.markdown-body { animation: fadeSlideUp 0.5s ease-out; }
+
+/* Each heading in notes animates */
+.markdown-body h1, .markdown-body h2, .markdown-body h3 {
+    animation: slideInRight 0.4s ease-out;
+}
+
+/* Question cards stagger animation */
+.question-card {
+    animation: staggerIn 0.4s ease-out both;
+}
+.question-card:nth-child(1) { animation-delay: 0.05s; }
+.question-card:nth-child(2) { animation-delay: 0.1s; }
+.question-card:nth-child(3) { animation-delay: 0.15s; }
+.question-card:nth-child(4) { animation-delay: 0.2s; }
+.question-card:nth-child(5) { animation-delay: 0.25s; }
+.question-card:nth-child(6) { animation-delay: 0.3s; }
+.question-card:nth-child(7) { animation-delay: 0.35s; }
+.question-card:nth-child(8) { animation-delay: 0.4s; }
+.question-card:nth-child(9) { animation-delay: 0.45s; }
+.question-card:nth-child(10) { animation-delay: 0.5s; }
+
+/* Option items hover animation */
+.option-item {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.option-item:hover {
+    transform: translateX(8px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.option-item.selected {
+    transform: translateX(8px);
+    box-shadow: 0 3px 12px rgba(52, 152, 219, 0.3);
+}
+.option-item.correct {
+    animation: scalePop 0.4s ease-out;
+    box-shadow: 0 3px 12px rgba(39, 174, 96, 0.3);
+}
+.option-item.wrong {
+    animation: shake 0.4s ease-out;
+    box-shadow: 0 3px 12px rgba(231, 76, 60, 0.3);
+}
+
+/* Shake animation for wrong answers */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px); }
+    40% { transform: translateX(8px); }
+    60% { transform: translateX(-5px); }
+    80% { transform: translateX(5px); }
+}
+
+/* Result card animation */
+.result-card { animation: scalePop 0.5s ease-out; }
+.score-circle { animation: scalePop 0.6s ease-out 0.2s both; }
+.score-details { animation: fadeSlideUp 0.5s ease-out 0.4s both; }
+
+/* Doubt section animation */
+.doubt-section { animation: fadeSlideUp 0.4s ease-out; }
+.doubt-item { animation: slideInRight 0.4s ease-out; }
+
+/* Sidebar topic hover animation */
+.nav-topic {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nav-topic:hover {
+    transform: translateX(6px);
+    padding-left: 2.2rem;
+}
+.nav-topic.active {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Sidebar subtopics slide down */
+.nav-subtopics {
+    display: none;
+    background: rgba(0,0,0,0.15);
+    overflow: hidden;
+}
+.nav-subtopics.open {
+    display: block;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; max-height: 0; }
+    to { opacity: 1; max-height: 1000px; }
+}
+
+/* Category arrow smooth rotation */
+.nav-category .arrow {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Landing page elements stagger */
+.landing-hero { animation: fadeSlideUp 0.5s ease-out; }
+.exam-info .info-card { animation: staggerIn 0.4s ease-out both; }
+.exam-info .info-card:nth-child(1) { animation-delay: 0.1s; }
+.exam-info .info-card:nth-child(2) { animation-delay: 0.2s; }
+.exam-info .info-card:nth-child(3) { animation-delay: 0.3s; }
+.info-card { transition: transform 0.25s ease, box-shadow 0.25s ease; }
+.info-card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); }
+
+.custom-topic-section { animation: fadeSlideUp 0.5s ease-out 0.3s both; }
+.quick-topics { animation: fadeSlideUp 0.5s ease-out 0.4s both; }
+
+/* Quick topic buttons hover */
+.quick-btn {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.quick-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(26, 86, 50, 0.2);
+}
+
+/* Loader spinner glow */
+.spinner { animation: spin 0.8s linear infinite, pulseGlow 1.5s ease-in-out infinite; }
+
+/* Back button hover */
+.back-btn { transition: all 0.25s ease; }
+.back-btn:hover { transform: translateX(-4px); }
+
+/* Test config animation */
+.test-config { animation: scalePop 0.4s ease-out; }
+.count-btn { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+.count-btn:hover { transform: scale(1.08); }
+.start-test-btn { transition: all 0.25s ease; }
+.start-test-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(26, 86, 50, 0.3); }
+
+/* Submit button pulse */
+.submit-test-btn { transition: all 0.25s ease; }
+.submit-test-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(26, 86, 50, 0.3); }
+
+/* Smooth page transitions */
+.landing, .content-page { transition: opacity 0.3s ease; }
+
+/* Timer pulse when active */
+.timer { transition: all 0.3s ease; }
+
+/* Progress bar smooth fill */
+.progress-fill { transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
