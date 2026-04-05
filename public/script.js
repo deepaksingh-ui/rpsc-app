@@ -843,15 +843,20 @@ async function askDoubt() {
             const doubtItem = document.createElement('div');
             doubtItem.className = 'doubt-item';
 
-            // Build images HTML for doubt
+            // Build images HTML for doubt (clickable)
             let imagesHtml = '';
             if (doubtImages.length > 0) {
                 imagesHtml = '<div class="doubt-images">';
                 doubtImages.slice(0, 3).forEach(img => {
+                    const safeTitle = (img.title || '').replace(/'/g, "\\'");
+                    const safeCaption = (img.caption || '').replace(/'/g, "\\'");
+                    const safeUrl = (img.url || '').replace(/'/g, "\\'");
                     imagesHtml += `
-                        <div class="doubt-img-card">
+                        <div class="doubt-img-card clickable-image" style="cursor:pointer"
+                            data-img-title="${img.title}" data-img-caption="${img.caption || ''}" data-img-url="${img.url}"
+                            onclick="openImageExplainPopup('${safeTitle}', '${safeCaption}', '${safeUrl}', this)">
                             <img src="${img.url}" alt="${img.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
-                            <div class="doubt-img-label"><strong>${img.title}</strong><br>${img.caption || ''}</div>
+                            <div class="doubt-img-label"><strong>${img.title}</strong><br>${img.caption || ''}<br><span class="click-hint" style="color:var(--primary);">Click karke jaano</span></div>
                         </div>
                     `;
                 });
@@ -966,12 +971,16 @@ function injectImagesInNotes() {
         if (i > 0 && i % 2 === 0) {
             const imgData = topicImages[imgIndex];
             const imgCard = document.createElement('div');
-            imgCard.className = 'notes-image-card';
+            imgCard.className = 'notes-image-card clickable-image';
+            imgCard.dataset.imgTitle = imgData.title;
+            imgCard.dataset.imgCaption = imgData.caption || '';
+            imgCard.dataset.imgUrl = imgData.url;
             imgCard.innerHTML = `
                 <img src="${imgData.url}" alt="${imgData.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
                 <div class="notes-image-caption">
                     <strong>${imgData.title}</strong>
                     <p>${imgData.caption || ''}</p>
+                    <span class="click-hint">Click karke jaano iske baare mein</span>
                 </div>
             `;
             heading.parentNode.insertBefore(imgCard, heading);
@@ -983,23 +992,67 @@ function injectImagesInNotes() {
     if (imgIndex < topicImages.length) {
         const gallery = document.createElement('div');
         gallery.className = 'notes-image-gallery';
-        gallery.innerHTML = '<h3>Important Images - Yaad Rakhiye</h3><div class="gallery-grid"></div>';
+        gallery.innerHTML = '<h3>Important Images - Yaad Rakhiye (Click karke jaano)</h3><div class="gallery-grid"></div>';
         const grid = gallery.querySelector('.gallery-grid');
 
         for (let i = imgIndex; i < topicImages.length; i++) {
             const imgData = topicImages[i];
-            grid.innerHTML += `
-                <div class="gallery-item">
-                    <img src="${imgData.url}" alt="${imgData.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
-                    <div class="gallery-label">
-                        <strong>${imgData.title}</strong>
-                        <p>${imgData.caption || ''}</p>
-                    </div>
+            const item = document.createElement('div');
+            item.className = 'gallery-item clickable-image';
+            item.dataset.imgTitle = imgData.title;
+            item.dataset.imgCaption = imgData.caption || '';
+            item.dataset.imgUrl = imgData.url;
+            item.innerHTML = `
+                <img src="${imgData.url}" alt="${imgData.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
+                <div class="gallery-label">
+                    <strong>${imgData.title}</strong>
+                    <p>${imgData.caption || ''}</p>
+                    <span class="click-hint">Click karke jaano</span>
                 </div>
             `;
+            grid.appendChild(item);
         }
         notesEl.appendChild(gallery);
     }
+
+    // Make all images clickable - open explain popup
+    document.querySelectorAll('.clickable-image').forEach(el => {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', () => {
+            const title = el.dataset.imgTitle;
+            const caption = el.dataset.imgCaption;
+            const imgUrl = el.dataset.imgUrl;
+            openImageExplainPopup(title, caption, imgUrl, el);
+        });
+    });
+}
+
+// ===== Image Explain Popup =====
+function openImageExplainPopup(title, caption, imgUrl, afterEl) {
+    // Remove any existing popups
+    document.querySelectorAll('.tap-image-popup').forEach(p => p.remove());
+
+    const popupId = 'imgpop_' + Date.now();
+    const popup = document.createElement('div');
+    popup.className = 'tap-image-popup';
+    popup.innerHTML = `
+        <div class="tap-image-content">
+            <button class="tap-image-close" onclick="this.closest('.tap-image-popup').remove()">✕</button>
+            <img src="${imgUrl}" alt="${title}" onerror="this.style.display='none'">
+            <div class="tap-image-info">
+                <strong>${title}</strong>
+                <p>${caption}</p>
+            </div>
+            <div class="tap-explain-area" id="${popupId}" style="display:block;">
+                <div class="tap-loading"><div class="spinner" style="width:25px;height:25px;border-width:3px;"></div> ${title} ke baare mein bata raha hoon...</div>
+            </div>
+        </div>
+    `;
+    afterEl.after(popup);
+    popup.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Auto explain
+    tapExplain(popupId, title);
 }
 
 // ===== Text-to-Speech =====

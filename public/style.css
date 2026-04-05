@@ -462,6 +462,13 @@ body {
     padding: 12px 16px; background: linear-gradient(135deg, var(--primary-dark), var(--primary));
     color: #fff;
 }
+.clickable-image { cursor: pointer; transition: all 0.3s ease; }
+.clickable-image:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
+.click-hint {
+    display: block; font-size: 0.75rem; margin-top: 4px;
+    color: rgba(255,255,255,0.7); font-style: italic;
+}
+.clickable-image:hover .click-hint { color: var(--accent); }
 .notes-image-caption strong {
     color: var(--accent); font-size: 1rem; display: block; margin-bottom: 2px;
 }
