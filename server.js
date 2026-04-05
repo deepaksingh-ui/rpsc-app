@@ -146,6 +146,44 @@ Answer the student's question in ${lang} language. Be clear, detailed and exam-f
   }
 });
 
+// ===== TOPIC IMAGE ENDPOINT =====
+app.post("/api/topic-image", async (req, res) => {
+  try {
+    const { topic } = req.body;
+    if (!topic) return res.status(400).json({ error: "Topic is required" });
+
+    const cacheKey = `img_${topic}`;
+    if (serverCache[cacheKey]) {
+      return res.json(serverCache[cacheKey]);
+    }
+
+    // Search Wikipedia for topic image
+    const searchQuery = encodeURIComponent(topic.split("-")[0].trim());
+    const wikiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${searchQuery}`;
+
+    let imageUrl = null;
+    try {
+      const wikiRes = await fetch(wikiUrl);
+      const wikiData = await wikiRes.json();
+      if (wikiData.thumbnail && wikiData.thumbnail.source) {
+        imageUrl = wikiData.thumbnail.source.replace(/\/\d+px-/, '/500px-');
+      }
+    } catch(e) {}
+
+    // Fallback: Unsplash
+    if (!imageUrl) {
+      imageUrl = `https://source.unsplash.com/600x300/?${searchQuery},education,india`;
+    }
+
+    const result = { imageUrl };
+    serverCache[cacheKey] = result;
+    res.json(result);
+  } catch (error) {
+    console.error("Image error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ===== MOCK TEST ENDPOINT =====
 app.post("/api/mocktest", async (req, res) => {
   try {
@@ -187,6 +225,11 @@ You MUST respond in this EXACT JSON format and NOTHING else (no markdown, no bac
 
 Generate exactly ${numQuestions} questions. Return ONLY valid JSON. No extra text, no markdown code blocks.`;
 
+    const cacheKey = `mock_${topic}_${lang}_${numQuestions}`;
+    if (serverCache[cacheKey]) {
+      return res.json(serverCache[cacheKey]);
+    }
+
     const result = await callGemini(prompt);
 
     // Parse JSON from response (handle markdown code blocks if present)
@@ -196,6 +239,7 @@ Generate exactly ${numQuestions} questions. Return ONLY valid JSON. No extra tex
     }
 
     const parsed = JSON.parse(jsonStr);
+    serverCache[cacheKey] = parsed;
     res.json(parsed);
   } catch (error) {
     console.error("Mock test error:", error.message);

@@ -83,6 +83,11 @@
                 <h2 id="topicTitle">Topic</h2>
             </div>
 
+            <!-- Topic Image -->
+            <div class="topic-image-container" id="topicImageContainer" style="display:none;">
+                <img id="topicImage" alt="Topic Image">
+            </div>
+
             <!-- Language Selector -->
             <div class="lang-selector" id="langSelector">
                 <p>Choose language for notes & test:</p>
@@ -105,6 +110,14 @@
                     <div class="spinner"></div>
                     <p>AI Notes generate ho rahe hain...</p>
                 </div>
+                <div class="notes-toolbar" id="notesToolbar" style="display:none;">
+                    <button class="toolbar-btn speak-btn" id="speakBtn" onclick="toggleSpeak()">
+                        <span id="speakIcon">&#128266;</span> Suniye - Notes padh ke sunaaye
+                    </button>
+                    <button class="toolbar-btn" id="stopSpeakBtn" onclick="stopSpeak()" style="display:none;">
+                        &#9724; Band karo
+                    </button>
+                </div>
                 <div id="notesContent" class="markdown-body"></div>
 
                 <!-- YouTube Video Section -->
@@ -116,10 +129,17 @@
 
                 <!-- Doubt Section -->
                 <div class="doubt-section" id="doubtSection" style="display:none;">
-                    <h3>Got a doubt? Ask anything about this topic:</h3>
+                    <h3>AI Tutor - Kuch bhi pucho is topic ke baare mein:</h3>
+                    <div class="tutor-quick-actions">
+                        <button class="tutor-action" onclick="askQuickDoubt('Isko aur simple language mein samjhao')">Simple mein samjhao</button>
+                        <button class="tutor-action" onclick="askQuickDoubt('Is topic ke 10 important MCQs banao with answers')">MCQs banao</button>
+                        <button class="tutor-action" onclick="askQuickDoubt('Is topic ka real life example do')">Real life example</button>
+                        <button class="tutor-action" onclick="askQuickDoubt('Is topic ke trick aur shortcut btao yaad karne ke liye')">Tricks & Shortcuts</button>
+                        <button class="tutor-action" onclick="askQuickDoubt('Previous year mein is topic se kya aaya tha RPSC mein')">Previous Year Questions</button>
+                    </div>
                     <div class="doubt-input-row">
-                        <input type="text" id="doubtInput" placeholder="Apna question likho... (Hindi / English)">
-                        <button id="doubtBtn">Ask</button>
+                        <input type="text" id="doubtInput" placeholder="Apna sawal likho... jaise teacher se puchte ho">
+                        <button id="doubtBtn">Pucho</button>
                     </div>
                     <div id="doubtLoading" class="loader" style="display:none;">
                         <div class="spinner"></div>

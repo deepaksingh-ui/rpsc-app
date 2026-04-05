@@ -378,7 +378,13 @@ function openTopic(topic) {
     stopTimer();
 
     document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('topicImageContainer').style.display = 'none';
+    document.getElementById('notesToolbar').style.display = 'none';
+    stopSpeak();
     contentPage.scrollIntoView({ behavior: 'smooth' });
+
+    // Load topic image
+    loadTopicImage();
 }
 
 // ===== Language Selection =====
@@ -426,6 +432,7 @@ async function loadNotes() {
         notesLoading.style.display = 'none';
         notesContent.innerHTML = marked.parse(notesCache[cacheKey]);
         document.getElementById('doubtSection').style.display = 'block';
+        document.getElementById('notesToolbar').style.display = 'flex';
         loadYouTubeVideos();
         return;
     }
@@ -452,6 +459,7 @@ async function loadNotes() {
             notesCache[cacheKey] = data.result;
             notesContent.innerHTML = marked.parse(data.result);
             document.getElementById('doubtSection').style.display = 'block';
+            document.getElementById('notesToolbar').style.display = 'flex';
         } else {
             notesContent.innerHTML = `<p class="error-msg">Error: ${data.error}</p>`;
         }
@@ -825,6 +833,87 @@ async function askDoubt() {
         doubtLoading.style.display = 'none';
         alert('Server se connect nahi ho paya!');
     }
+}
+
+// ===== Load Topic Image =====
+async function loadTopicImage() {
+    const container = document.getElementById('topicImageContainer');
+    const img = document.getElementById('topicImage');
+
+    try {
+        const res = await fetch('/api/topic-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic: currentTopic })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.imageUrl) {
+            img.src = data.imageUrl;
+            img.onload = () => { container.style.display = 'block'; };
+            img.onerror = () => { container.style.display = 'none'; };
+        }
+    } catch (e) {
+        container.style.display = 'none';
+    }
+}
+
+// ===== Text-to-Speech =====
+let speechUtterance = null;
+let isSpeaking = false;
+
+function toggleSpeak() {
+    if (isSpeaking) {
+        stopSpeak();
+        return;
+    }
+
+    const text = document.getElementById('notesContent').innerText;
+    if (!text) return;
+
+    speechUtterance = new SpeechSynthesisUtterance(text);
+
+    // Set Hindi voice if available
+    const voices = speechSynthesis.getVoices();
+    const hindiVoice = voices.find(v => v.lang.startsWith('hi')) || voices.find(v => v.lang.startsWith('en-IN')) || voices[0];
+    if (hindiVoice) speechUtterance.voice = hindiVoice;
+
+    speechUtterance.rate = 0.9;
+    speechUtterance.pitch = 1;
+
+    speechUtterance.onend = () => {
+        isSpeaking = false;
+        document.getElementById('speakBtn').classList.remove('speaking');
+        document.getElementById('speakBtn').innerHTML = '<span>&#128266;</span> Suniye - Notes padh ke sunaaye';
+        document.getElementById('stopSpeakBtn').style.display = 'none';
+    };
+
+    speechSynthesis.speak(speechUtterance);
+    isSpeaking = true;
+    document.getElementById('speakBtn').classList.add('speaking');
+    document.getElementById('speakBtn').innerHTML = '<span>&#128266;</span> Bol raha hai...';
+    document.getElementById('stopSpeakBtn').style.display = 'inline-flex';
+}
+
+function stopSpeak() {
+    speechSynthesis.cancel();
+    isSpeaking = false;
+    const speakBtn = document.getElementById('speakBtn');
+    if (speakBtn) {
+        speakBtn.classList.remove('speaking');
+        speakBtn.innerHTML = '<span>&#128266;</span> Suniye - Notes padh ke sunaaye';
+    }
+    const stopBtn = document.getElementById('stopSpeakBtn');
+    if (stopBtn) stopBtn.style.display = 'none';
+}
+
+// Load voices
+speechSynthesis.onvoiceschanged = () => { speechSynthesis.getVoices(); };
+
+// ===== Quick Doubt (Tutor Actions) =====
+function askQuickDoubt(question) {
+    document.getElementById('doubtInput').value = question;
+    askDoubt();
 }
 
 // ===== Init =====
