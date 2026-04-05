@@ -193,6 +193,51 @@ Generate exactly ${numQuestions} questions. Return ONLY valid JSON. No extra tex
   }
 });
 
+// ===== YOUTUBE VIDEO SEARCH ENDPOINT =====
+app.post("/api/youtube", async (req, res) => {
+  try {
+    const { topic } = req.body;
+    if (!topic) return res.status(400).json({ error: "Topic is required" });
+
+    const searchQuery = encodeURIComponent(`${topic} RPSC exam preparation Hindi`);
+    const searchUrl = `https://www.youtube.com/results?search_query=${searchQuery}`;
+
+    const response = await fetch(searchUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      }
+    });
+    const html = await response.text();
+
+    // Extract video IDs from YouTube search results
+    const videoIdRegex = /"videoId":"([a-zA-Z0-9_-]{11})"/g;
+    const videoIds = [];
+    let match;
+    while ((match = videoIdRegex.exec(html)) !== null && videoIds.length < 5) {
+      if (!videoIds.includes(match[1])) {
+        videoIds.push(match[1]);
+      }
+    }
+
+    if (videoIds.length === 0) {
+      return res.json({ videos: [] });
+    }
+
+    // Extract titles for each video
+    const videos = videoIds.map((id) => ({
+      id,
+      url: `https://www.youtube.com/watch?v=${id}`,
+      embed: `https://www.youtube.com/embed/${id}`,
+      thumbnail: `https://img.youtube.com/vi/${id}/mqdefault.jpg`
+    }));
+
+    res.json({ videos });
+  } catch (error) {
+    console.error("YouTube search error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ===== OLD ENDPOINT (backward compatible) =====
 app.post("/api/ask", async (req, res) => {
   try {

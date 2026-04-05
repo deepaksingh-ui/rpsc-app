@@ -364,6 +364,9 @@ function openTopic(topic) {
     submitTestBtn.style.display = 'none';
     document.getElementById('doubtSection').style.display = 'none';
     document.getElementById('doubtHistory').innerHTML = '';
+    document.getElementById('videoSection').style.display = 'none';
+    document.getElementById('videoPlayer').innerHTML = '';
+    document.getElementById('videoList').innerHTML = '';
     document.getElementById('testConfig').style.display = 'block';
     testStarted = false;
     userAnswers = {};
@@ -425,6 +428,7 @@ async function loadNotes() {
         if (res.ok) {
             notesContent.innerHTML = marked.parse(data.result);
             document.getElementById('doubtSection').style.display = 'block';
+            loadYouTubeVideos();
         } else {
             notesContent.innerHTML = `<p class="error-msg">Error: ${data.error}</p>`;
         }
@@ -432,6 +436,58 @@ async function loadNotes() {
         notesLoading.style.display = 'none';
         notesContent.innerHTML = `<p class="error-msg">Server se connect nahi ho paya!</p>`;
     }
+}
+
+// ===== Load YouTube Videos =====
+async function loadYouTubeVideos() {
+    const videoSection = document.getElementById('videoSection');
+    const videoPlayer = document.getElementById('videoPlayer');
+    const videoList = document.getElementById('videoList');
+
+    videoSection.style.display = 'none';
+    videoPlayer.innerHTML = '';
+    videoList.innerHTML = '';
+
+    try {
+        const res = await fetch('/api/youtube', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic: currentTopic })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.videos && data.videos.length > 0) {
+            videoSection.style.display = 'block';
+
+            // Play first video
+            playVideo(data.videos[0].id, videoPlayer);
+
+            // Build thumbnail list
+            data.videos.forEach((video, i) => {
+                const thumb = document.createElement('div');
+                thumb.className = `video-thumb${i === 0 ? ' active' : ''}`;
+                thumb.innerHTML = `
+                    <img src="${video.thumbnail}" alt="Video ${i + 1}">
+                    <div class="play-icon"></div>
+                    <div class="video-thumb-label">Video ${i + 1}</div>
+                `;
+                thumb.addEventListener('click', () => {
+                    document.querySelectorAll('.video-thumb').forEach(t => t.classList.remove('active'));
+                    thumb.classList.add('active');
+                    playVideo(video.id, videoPlayer);
+                });
+                videoList.appendChild(thumb);
+            });
+        }
+    } catch (e) {
+        console.error('YouTube load error:', e);
+    }
+}
+
+function playVideo(videoId, container) {
+    container.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen></iframe>`;
 }
 
 // ===== Load Mock Test =====
