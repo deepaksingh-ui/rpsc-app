@@ -436,6 +436,25 @@ body {
     .video-list { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ===== Skeleton Loader ===== */
+.skeleton-loader { padding: 1rem 0; }
+.skeleton-line {
+    height: 14px; border-radius: 6px; margin-bottom: 12px;
+    background: linear-gradient(90deg, #e8ede9 25%, #d4e0d8 50%, #e8ede9 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+.skeleton-title { width: 45%; height: 22px; margin-bottom: 18px; }
+.skeleton-full { width: 100%; }
+.skeleton-medium { width: 75%; }
+.skeleton-short { width: 50%; }
+.skeleton-gap { height: 0; margin-bottom: 24px; }
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
 /* ===== ANIMATIONS ===== */
 
 /* Fade-in and slide-up for content page */

@@ -24,6 +24,9 @@ const API_KEYS = [
 
 let currentKeyIndex = 0;
 
+// Server-side cache for API responses
+const serverCache = {};
+
 // Helper: Call Gemini API with key rotation
 async function callGemini(prompt) {
   if (API_KEYS.length === 0) {
@@ -68,6 +71,12 @@ app.post("/api/notes", async (req, res) => {
     if (!topic) return res.status(400).json({ error: "Topic is required" });
 
     const lang = language || "Hinglish";
+    const cacheKey = `notes_${topic}_${lang}`;
+
+    // Return cached response if available
+    if (serverCache[cacheKey]) {
+      return res.json({ result: serverCache[cacheKey] });
+    }
 
     const prompt = `You are an expert RPSC (Rajasthan Public Service Commission) School Lecturer exam coach.
 
@@ -101,6 +110,7 @@ IMPORTANT:
 - Include facts, figures, dates, names that are commonly asked.`;
 
     const result = await callGemini(prompt);
+    serverCache[cacheKey] = result;
     res.json({ result });
   } catch (error) {
     console.error("Notes error:", error.message);

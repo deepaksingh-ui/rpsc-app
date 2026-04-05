@@ -279,6 +279,10 @@ let timerSeconds = 0;
 let questionCount = 15;
 let testStarted = false;
 
+// ===== Cache =====
+const notesCache = {};
+const videoCache = {};
+
 // ===== DOM =====
 const syllabusNav = document.getElementById('syllabusNav');
 const landingPage = document.getElementById('landingPage');
@@ -413,29 +417,69 @@ function switchTab(tab) {
 // ===== Load Notes =====
 async function loadNotes() {
     notesTab.style.display = 'block';
-    notesLoading.style.display = 'block';
     notesContent.innerHTML = '';
 
-    try {
-        const res = await fetch('/api/notes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ topic: currentTopic, language: selectedLang })
-        });
-        const data = await res.json();
+    const cacheKey = `${currentTopic}_${selectedLang}`;
+
+    // Check cache first - instant load
+    if (notesCache[cacheKey]) {
         notesLoading.style.display = 'none';
+        notesContent.innerHTML = marked.parse(notesCache[cacheKey]);
+        document.getElementById('doubtSection').style.display = 'block';
+        loadYouTubeVideos();
+        return;
+    }
+
+    // Show skeleton loader
+    notesLoading.style.display = 'none';
+    notesContent.innerHTML = buildSkeletonLoader();
+
+    // Load notes + YouTube videos in parallel
+    const notesPromise = fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: currentTopic, language: selectedLang })
+    });
+
+    // Start YouTube loading in parallel (don't wait)
+    loadYouTubeVideos();
+
+    try {
+        const res = await notesPromise;
+        const data = await res.json();
 
         if (res.ok) {
+            notesCache[cacheKey] = data.result;
             notesContent.innerHTML = marked.parse(data.result);
             document.getElementById('doubtSection').style.display = 'block';
-            loadYouTubeVideos();
         } else {
             notesContent.innerHTML = `<p class="error-msg">Error: ${data.error}</p>`;
         }
     } catch (e) {
-        notesLoading.style.display = 'none';
         notesContent.innerHTML = `<p class="error-msg">Server se connect nahi ho paya!</p>`;
     }
+}
+
+// ===== Skeleton Loader =====
+function buildSkeletonLoader() {
+    return `<div class="skeleton-loader">
+        <div class="skeleton-line skeleton-title"></div>
+        <div class="skeleton-line skeleton-full"></div>
+        <div class="skeleton-line skeleton-full"></div>
+        <div class="skeleton-line skeleton-medium"></div>
+        <div class="skeleton-line skeleton-gap"></div>
+        <div class="skeleton-line skeleton-title"></div>
+        <div class="skeleton-line skeleton-full"></div>
+        <div class="skeleton-line skeleton-full"></div>
+        <div class="skeleton-line skeleton-full"></div>
+        <div class="skeleton-line skeleton-short"></div>
+        <div class="skeleton-line skeleton-gap"></div>
+        <div class="skeleton-line skeleton-title"></div>
+        <div class="skeleton-line skeleton-full"></div>
+        <div class="skeleton-line skeleton-medium"></div>
+        <div class="skeleton-line skeleton-full"></div>
+        <div class="skeleton-line skeleton-short"></div>
+    </div>`;
 }
 
 // ===== Load YouTube Videos =====
@@ -448,6 +492,12 @@ async function loadYouTubeVideos() {
     videoPlayer.innerHTML = '';
     videoList.innerHTML = '';
 
+    // Check cache
+    if (videoCache[currentTopic]) {
+        renderVideos(videoCache[currentTopic], videoSection, videoPlayer, videoList);
+        return;
+    }
+
     try {
         const res = await fetch('/api/youtube', {
             method: 'POST',
@@ -457,31 +507,33 @@ async function loadYouTubeVideos() {
         const data = await res.json();
 
         if (res.ok && data.videos && data.videos.length > 0) {
-            videoSection.style.display = 'block';
-
-            // Play first video
-            playVideo(data.videos[0].id, videoPlayer);
-
-            // Build thumbnail list
-            data.videos.forEach((video, i) => {
-                const thumb = document.createElement('div');
-                thumb.className = `video-thumb${i === 0 ? ' active' : ''}`;
-                thumb.innerHTML = `
-                    <img src="${video.thumbnail}" alt="Video ${i + 1}">
-                    <div class="play-icon"></div>
-                    <div class="video-thumb-label">Video ${i + 1}</div>
-                `;
-                thumb.addEventListener('click', () => {
-                    document.querySelectorAll('.video-thumb').forEach(t => t.classList.remove('active'));
-                    thumb.classList.add('active');
-                    playVideo(video.id, videoPlayer);
-                });
-                videoList.appendChild(thumb);
-            });
+            videoCache[currentTopic] = data.videos;
+            renderVideos(data.videos, videoSection, videoPlayer, videoList);
         }
     } catch (e) {
         console.error('YouTube load error:', e);
     }
+}
+
+function renderVideos(videos, section, player, list) {
+    section.style.display = 'block';
+    playVideo(videos[0].id, player);
+
+    videos.forEach((video, i) => {
+        const thumb = document.createElement('div');
+        thumb.className = `video-thumb${i === 0 ? ' active' : ''}`;
+        thumb.innerHTML = `
+            <img src="${video.thumbnail}" alt="Video ${i + 1}">
+            <div class="play-icon"></div>
+            <div class="video-thumb-label">Video ${i + 1}</div>
+        `;
+        thumb.addEventListener('click', () => {
+            document.querySelectorAll('.video-thumb').forEach(t => t.classList.remove('active'));
+            thumb.classList.add('active');
+            playVideo(video.id, player);
+        });
+        list.appendChild(thumb);
+    });
 }
 
 function playVideo(videoId, container) {
