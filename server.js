@@ -157,8 +157,16 @@ app.post("/api/topic-image", async (req, res) => {
       return res.json(serverCache[cacheKey]);
     }
 
-    // Ask Gemini for image search keywords related to the topic
-    const keywordPrompt = `For the topic "${topic}" (RPSC exam, India/Rajasthan context), give me exactly 5 English Wikipedia search keywords to find relevant images. Return ONLY a JSON array of strings, nothing else. Example: ["Maharana Pratap","Battle of Haldighati","Mewar Kingdom","Rajput warrior","Chittorgarh Fort"]`;
+    // Ask Gemini for important image keywords with captions that help remember
+    const keywordPrompt = `Topic: "${topic}" (RPSC exam, India/Rajasthan context)
+
+Give me exactly 6 important visual things a student MUST see to understand and remember this topic. For each, give:
+- "keyword": English Wikipedia article name (exact page title) for finding the image
+- "caption": Short Hindi/Hinglish caption (1 line) explaining WHY this image is important for the topic
+- "importance": Why seeing this image helps remember the topic
+
+Return ONLY a JSON array, nothing else:
+[{"keyword":"Maharana Pratap","caption":"महाराणा प्रताप - मेवाड़ के वीर योद्धा जिन्होंने अकबर से लोहा लिया","importance":"Helps visualize the key historical figure"}]`;
 
     let keywords = [];
     try {
@@ -169,38 +177,67 @@ app.post("/api/topic-image", async (req, res) => {
       }
       keywords = JSON.parse(jsonStr);
     } catch(e) {
-      // Fallback: use topic name parts
-      keywords = topic.split(/[-–,]/).map(s => s.trim()).filter(Boolean).slice(0, 3);
+      keywords = topic.split(/[-–,]/).map(s => ({ keyword: s.trim(), caption: s.trim(), importance: "" })).filter(k => k.keyword).slice(0, 4);
     }
 
-    // Search Wikipedia for images for each keyword
+    // Search Wikipedia + Wikimedia Commons for high quality images
     const images = [];
-    for (const keyword of keywords) {
-      if (images.length >= 5) break;
+    for (const item of keywords) {
+      if (images.length >= 6) break;
       try {
-        const searchQuery = encodeURIComponent(keyword.trim());
-        const wikiSearchUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${searchQuery}`;
-        const wikiRes = await fetch(wikiSearchUrl, { headers: { "User-Agent": "RPSCApp/1.0" } });
+        const searchQuery = encodeURIComponent(item.keyword.trim());
+
+        // Try Wikipedia summary first (has curated main images)
+        const wikiRes = await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${searchQuery}`,
+          { headers: { "User-Agent": "RPSCApp/1.0" } }
+        );
         const wikiData = await wikiRes.json();
 
-        if (wikiData.thumbnail && wikiData.thumbnail.source) {
-          const imgUrl = wikiData.thumbnail.source.replace(/\/\d+px-/, '/500px-');
-          // Avoid duplicate images
-          if (!images.find(img => img.url === imgUrl)) {
-            images.push({
-              url: imgUrl,
-              title: wikiData.title || keyword,
-              description: wikiData.description || ''
-            });
+        let imgUrl = null;
+        // Prefer originalimage for better quality, fallback to thumbnail
+        if (wikiData.originalimage && wikiData.originalimage.source) {
+          imgUrl = wikiData.originalimage.source;
+        } else if (wikiData.thumbnail && wikiData.thumbnail.source) {
+          imgUrl = wikiData.thumbnail.source.replace(/\/\d+px-/, '/800px-');
+        }
+
+        if (!imgUrl) {
+          // Try Wikimedia Commons search
+          const commonsRes = await fetch(
+            `https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${searchQuery}&srnamespace=6&srlimit=1&format=json`,
+            { headers: { "User-Agent": "RPSCApp/1.0" } }
+          );
+          const commonsData = await commonsRes.json();
+          if (commonsData.query?.search?.[0]) {
+            const fileTitle = encodeURIComponent(commonsData.query.search[0].title);
+            const fileRes = await fetch(
+              `https://commons.wikimedia.org/w/api.php?action=query&titles=${fileTitle}&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json`,
+              { headers: { "User-Agent": "RPSCApp/1.0" } }
+            );
+            const fileData = await fileRes.json();
+            const pages = fileData.query?.pages;
+            if (pages) {
+              const page = Object.values(pages)[0];
+              if (page.imageinfo?.[0]?.thumburl) {
+                imgUrl = page.imageinfo[0].thumburl;
+              }
+            }
           }
+        }
+
+        if (imgUrl && !images.find(img => img.url === imgUrl)) {
+          images.push({
+            url: imgUrl,
+            title: item.keyword,
+            caption: item.caption || wikiData.description || '',
+            importance: item.importance || ''
+          });
         }
       } catch(e) {}
     }
 
-    // Main banner image (first one or fallback)
-    const searchQuery = encodeURIComponent(topic.split("-")[0].trim());
-    let imageUrl = images.length > 0 ? images[0].url : `https://source.unsplash.com/600x300/?${searchQuery},education,india`;
-
+    const imageUrl = images.length > 0 ? images[0].url : null;
     const result = { imageUrl, images };
     serverCache[cacheKey] = result;
     res.json(result);

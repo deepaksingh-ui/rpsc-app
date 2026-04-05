@@ -872,28 +872,30 @@ function injectImagesInNotes() {
     if (topicImages.length === 0) return;
 
     const notesEl = document.getElementById('notesContent');
-    if (!notesEl || !notesEl.innerHTML) {
-        // Notes not loaded yet, retry after 3 seconds
+    if (!notesEl || !notesEl.innerHTML || notesEl.querySelector('.skeleton-loader')) {
         setTimeout(injectImagesInNotes, 3000);
         return;
     }
+
+    // Remove any previously injected images
+    notesEl.querySelectorAll('.notes-image-card, .notes-image-gallery').forEach(el => el.remove());
 
     // Find all h2 headings in notes
     const headings = notesEl.querySelectorAll('h2');
     let imgIndex = 0;
 
+    // Insert images between sections (after every 2nd heading)
     headings.forEach((heading, i) => {
         if (imgIndex >= topicImages.length) return;
-        // Insert image after every h2 (before its content)
-        if (i > 0 && i % 1 === 0) {
+        if (i > 0 && i % 2 === 0) {
             const imgData = topicImages[imgIndex];
             const imgCard = document.createElement('div');
             imgCard.className = 'notes-image-card';
             imgCard.innerHTML = `
-                <img src="${imgData.url}" alt="${imgData.title}" onerror="this.parentElement.style.display='none'">
+                <img src="${imgData.url}" alt="${imgData.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
                 <div class="notes-image-caption">
                     <strong>${imgData.title}</strong>
-                    ${imgData.description ? `<span> - ${imgData.description}</span>` : ''}
+                    <p>${imgData.caption || ''}</p>
                 </div>
             `;
             heading.parentNode.insertBefore(imgCard, heading);
@@ -901,19 +903,22 @@ function injectImagesInNotes() {
         }
     });
 
-    // If we have remaining images, add them in a gallery at the end
+    // Show all remaining images in a gallery
     if (imgIndex < topicImages.length) {
         const gallery = document.createElement('div');
         gallery.className = 'notes-image-gallery';
-        gallery.innerHTML = '<h3>Related Images</h3><div class="gallery-grid"></div>';
+        gallery.innerHTML = '<h3>Important Images - Yaad Rakhiye</h3><div class="gallery-grid"></div>';
         const grid = gallery.querySelector('.gallery-grid');
 
         for (let i = imgIndex; i < topicImages.length; i++) {
             const imgData = topicImages[i];
             grid.innerHTML += `
                 <div class="gallery-item">
-                    <img src="${imgData.url}" alt="${imgData.title}" onerror="this.parentElement.style.display='none'">
-                    <div class="gallery-label">${imgData.title}</div>
+                    <img src="${imgData.url}" alt="${imgData.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
+                    <div class="gallery-label">
+                        <strong>${imgData.title}</strong>
+                        <p>${imgData.caption || ''}</p>
+                    </div>
                 </div>
             `;
         }
