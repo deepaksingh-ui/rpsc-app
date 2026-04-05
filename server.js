@@ -146,7 +146,7 @@ Answer the student's question in ${lang} language. Be clear, detailed and exam-f
   }
 });
 
-// ===== TOPIC IMAGE ENDPOINT =====
+// ===== TOPIC IMAGES ENDPOINT =====
 app.post("/api/topic-image", async (req, res) => {
   try {
     const { topic } = req.body;
@@ -157,25 +157,51 @@ app.post("/api/topic-image", async (req, res) => {
       return res.json(serverCache[cacheKey]);
     }
 
-    // Search Wikipedia for topic image
-    const searchQuery = encodeURIComponent(topic.split("-")[0].trim());
-    const wikiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${searchQuery}`;
+    // Ask Gemini for image search keywords related to the topic
+    const keywordPrompt = `For the topic "${topic}" (RPSC exam, India/Rajasthan context), give me exactly 5 English Wikipedia search keywords to find relevant images. Return ONLY a JSON array of strings, nothing else. Example: ["Maharana Pratap","Battle of Haldighati","Mewar Kingdom","Rajput warrior","Chittorgarh Fort"]`;
 
-    let imageUrl = null;
+    let keywords = [];
     try {
-      const wikiRes = await fetch(wikiUrl);
-      const wikiData = await wikiRes.json();
-      if (wikiData.thumbnail && wikiData.thumbnail.source) {
-        imageUrl = wikiData.thumbnail.source.replace(/\/\d+px-/, '/500px-');
+      const keyResult = await callGemini(keywordPrompt);
+      let jsonStr = keyResult.trim();
+      if (jsonStr.startsWith("```")) {
+        jsonStr = jsonStr.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
       }
-    } catch(e) {}
-
-    // Fallback: Unsplash
-    if (!imageUrl) {
-      imageUrl = `https://source.unsplash.com/600x300/?${searchQuery},education,india`;
+      keywords = JSON.parse(jsonStr);
+    } catch(e) {
+      // Fallback: use topic name parts
+      keywords = topic.split(/[-–,]/).map(s => s.trim()).filter(Boolean).slice(0, 3);
     }
 
-    const result = { imageUrl };
+    // Search Wikipedia for images for each keyword
+    const images = [];
+    for (const keyword of keywords) {
+      if (images.length >= 5) break;
+      try {
+        const searchQuery = encodeURIComponent(keyword.trim());
+        const wikiSearchUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${searchQuery}`;
+        const wikiRes = await fetch(wikiSearchUrl, { headers: { "User-Agent": "RPSCApp/1.0" } });
+        const wikiData = await wikiRes.json();
+
+        if (wikiData.thumbnail && wikiData.thumbnail.source) {
+          const imgUrl = wikiData.thumbnail.source.replace(/\/\d+px-/, '/500px-');
+          // Avoid duplicate images
+          if (!images.find(img => img.url === imgUrl)) {
+            images.push({
+              url: imgUrl,
+              title: wikiData.title || keyword,
+              description: wikiData.description || ''
+            });
+          }
+        }
+      } catch(e) {}
+    }
+
+    // Main banner image (first one or fallback)
+    const searchQuery = encodeURIComponent(topic.split("-")[0].trim());
+    let imageUrl = images.length > 0 ? images[0].url : `https://source.unsplash.com/600x300/?${searchQuery},education,india`;
+
+    const result = { imageUrl, images };
     serverCache[cacheKey] = result;
     res.json(result);
   } catch (error) {

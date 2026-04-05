@@ -460,6 +460,7 @@ async function loadNotes() {
             notesContent.innerHTML = marked.parse(data.result);
             document.getElementById('doubtSection').style.display = 'block';
             document.getElementById('notesToolbar').style.display = 'flex';
+            injectImagesInNotes();
         } else {
             notesContent.innerHTML = `<p class="error-msg">Error: ${data.error}</p>`;
         }
@@ -836,9 +837,12 @@ async function askDoubt() {
 }
 
 // ===== Load Topic Image =====
+let topicImages = [];
+
 async function loadTopicImage() {
     const container = document.getElementById('topicImageContainer');
     const img = document.getElementById('topicImage');
+    topicImages = [];
 
     try {
         const res = await fetch('/api/topic-image', {
@@ -853,8 +857,67 @@ async function loadTopicImage() {
             img.onload = () => { container.style.display = 'block'; };
             img.onerror = () => { container.style.display = 'none'; };
         }
+
+        if (res.ok && data.images && data.images.length > 0) {
+            topicImages = data.images;
+            injectImagesInNotes();
+        }
     } catch (e) {
         container.style.display = 'none';
+    }
+}
+
+// Inject images inside notes content between sections
+function injectImagesInNotes() {
+    if (topicImages.length === 0) return;
+
+    const notesEl = document.getElementById('notesContent');
+    if (!notesEl || !notesEl.innerHTML) {
+        // Notes not loaded yet, retry after 3 seconds
+        setTimeout(injectImagesInNotes, 3000);
+        return;
+    }
+
+    // Find all h2 headings in notes
+    const headings = notesEl.querySelectorAll('h2');
+    let imgIndex = 0;
+
+    headings.forEach((heading, i) => {
+        if (imgIndex >= topicImages.length) return;
+        // Insert image after every h2 (before its content)
+        if (i > 0 && i % 1 === 0) {
+            const imgData = topicImages[imgIndex];
+            const imgCard = document.createElement('div');
+            imgCard.className = 'notes-image-card';
+            imgCard.innerHTML = `
+                <img src="${imgData.url}" alt="${imgData.title}" onerror="this.parentElement.style.display='none'">
+                <div class="notes-image-caption">
+                    <strong>${imgData.title}</strong>
+                    ${imgData.description ? `<span> - ${imgData.description}</span>` : ''}
+                </div>
+            `;
+            heading.parentNode.insertBefore(imgCard, heading);
+            imgIndex++;
+        }
+    });
+
+    // If we have remaining images, add them in a gallery at the end
+    if (imgIndex < topicImages.length) {
+        const gallery = document.createElement('div');
+        gallery.className = 'notes-image-gallery';
+        gallery.innerHTML = '<h3>Related Images</h3><div class="gallery-grid"></div>';
+        const grid = gallery.querySelector('.gallery-grid');
+
+        for (let i = imgIndex; i < topicImages.length; i++) {
+            const imgData = topicImages[i];
+            grid.innerHTML += `
+                <div class="gallery-item">
+                    <img src="${imgData.url}" alt="${imgData.title}" onerror="this.parentElement.style.display='none'">
+                    <div class="gallery-label">${imgData.title}</div>
+                </div>
+            `;
+        }
+        notesEl.appendChild(gallery);
     }
 }
 
