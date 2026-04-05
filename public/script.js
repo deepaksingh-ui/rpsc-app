@@ -859,8 +859,37 @@ async function loadTopicImage() {
 }
 
 // ===== Text-to-Speech =====
-let speechUtterance = null;
 let isSpeaking = false;
+let speechChunks = [];
+let currentChunkIndex = 0;
+
+function getVoice() {
+    const voices = speechSynthesis.getVoices();
+    // Priority: Hindi > Indian English > any English > first available
+    return voices.find(v => v.lang === 'hi-IN') ||
+           voices.find(v => v.lang.startsWith('hi')) ||
+           voices.find(v => v.lang === 'en-IN') ||
+           voices.find(v => v.lang.startsWith('en')) ||
+           voices[0];
+}
+
+// Split text into small chunks (Chrome cuts off long text)
+function splitTextToChunks(text) {
+    const sentences = text.replace(/\n+/g, '. ').split(/(?<=[।.!?])\s+/);
+    const chunks = [];
+    let current = '';
+
+    sentences.forEach(s => {
+        if ((current + ' ' + s).length > 180) {
+            if (current) chunks.push(current.trim());
+            current = s;
+        } else {
+            current += ' ' + s;
+        }
+    });
+    if (current.trim()) chunks.push(current.trim());
+    return chunks;
+}
 
 function toggleSpeak() {
     if (isSpeaking) {
@@ -869,35 +898,57 @@ function toggleSpeak() {
     }
 
     const text = document.getElementById('notesContent').innerText;
-    if (!text) return;
+    if (!text || text.length < 10) {
+        alert('Pehle notes load hone do!');
+        return;
+    }
 
-    speechUtterance = new SpeechSynthesisUtterance(text);
+    // Cancel any previous speech
+    speechSynthesis.cancel();
 
-    // Set Hindi voice if available
-    const voices = speechSynthesis.getVoices();
-    const hindiVoice = voices.find(v => v.lang.startsWith('hi')) || voices.find(v => v.lang.startsWith('en-IN')) || voices[0];
-    if (hindiVoice) speechUtterance.voice = hindiVoice;
-
-    speechUtterance.rate = 0.9;
-    speechUtterance.pitch = 1;
-
-    speechUtterance.onend = () => {
-        isSpeaking = false;
-        document.getElementById('speakBtn').classList.remove('speaking');
-        document.getElementById('speakBtn').innerHTML = '<span>&#128266;</span> Suniye - Notes padh ke sunaaye';
-        document.getElementById('stopSpeakBtn').style.display = 'none';
-    };
-
-    speechSynthesis.speak(speechUtterance);
+    speechChunks = splitTextToChunks(text);
+    currentChunkIndex = 0;
     isSpeaking = true;
+
     document.getElementById('speakBtn').classList.add('speaking');
     document.getElementById('speakBtn').innerHTML = '<span>&#128266;</span> Bol raha hai...';
     document.getElementById('stopSpeakBtn').style.display = 'inline-flex';
+
+    speakNextChunk();
+}
+
+function speakNextChunk() {
+    if (!isSpeaking || currentChunkIndex >= speechChunks.length) {
+        stopSpeak();
+        return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(speechChunks[currentChunkIndex]);
+    const voice = getVoice();
+    if (voice) utterance.voice = voice;
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    utterance.onend = () => {
+        currentChunkIndex++;
+        if (isSpeaking) speakNextChunk();
+    };
+
+    utterance.onerror = (e) => {
+        console.error('Speech error:', e);
+        currentChunkIndex++;
+        if (isSpeaking) speakNextChunk();
+    };
+
+    speechSynthesis.speak(utterance);
 }
 
 function stopSpeak() {
     speechSynthesis.cancel();
     isSpeaking = false;
+    speechChunks = [];
+    currentChunkIndex = 0;
     const speakBtn = document.getElementById('speakBtn');
     if (speakBtn) {
         speakBtn.classList.remove('speaking');
@@ -907,8 +958,12 @@ function stopSpeak() {
     if (stopBtn) stopBtn.style.display = 'none';
 }
 
-// Load voices
-speechSynthesis.onvoiceschanged = () => { speechSynthesis.getVoices(); };
+// Pre-load voices
+if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = () => { speechSynthesis.getVoices(); };
+}
+// Also try loading immediately
+speechSynthesis.getVoices();
 
 // ===== Quick Doubt (Tutor Actions) =====
 function askQuickDoubt(question) {
