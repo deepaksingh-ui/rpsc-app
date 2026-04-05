@@ -325,6 +325,26 @@ app.post("/api/quick-image", async (req, res) => {
       } catch(e) {}
     }
 
+    // Last resort: Ask Gemini for English keyword to search Wikipedia
+    if (!result.imageUrl) {
+      try {
+        const geminiRes = await callGemini(`What is the exact English Wikipedia article title for "${searchText}" in Indian/Rajasthan history/education context? Reply with ONLY the Wikipedia article title, nothing else.`);
+        const wikiTitle = geminiRes.trim().replace(/"/g, '');
+        const summaryRes = await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`,
+          { headers: { "User-Agent": "RPSCApp/1.0" } }
+        );
+        const summaryData = await summaryRes.json();
+        if (summaryData.originalimage?.source || summaryData.thumbnail?.source) {
+          result = {
+            imageUrl: summaryData.originalimage?.source || summaryData.thumbnail.source.replace(/\/\d+px-/, '/600px-'),
+            title: summaryData.title || wikiTitle,
+            caption: summaryData.description || ''
+          };
+        }
+      } catch(e) {}
+    }
+
     serverCache[cacheKey] = result;
     res.json(result);
   } catch (error) {

@@ -1146,26 +1146,74 @@ function makeTappableNotes() {
                 });
                 const data = await res.json();
 
-                if (data.imageUrl) {
-                    popup.innerHTML = `
-                        <div class="tap-image-content">
-                            <button class="tap-image-close" onclick="this.closest('.tap-image-popup').remove()">✕</button>
-                            <img src="${data.imageUrl}" alt="${data.title || text}" onerror="this.closest('.tap-image-popup').innerHTML='<p class=\\'error-msg\\' style=\\'padding:1rem\\'>Image nahi mili is topic ki</p>'">
-                            <div class="tap-image-info">
-                                <strong>${data.title || text}</strong>
-                                <p>${data.caption || ''}</p>
+                const popupId = 'tap_' + Date.now();
+                const imgHtml = data.imageUrl
+                    ? `<img src="${data.imageUrl}" alt="${data.title || text}" onerror="this.style.display='none'">`
+                    : '';
+                const titleText = data.title || text;
+                const captionText = data.caption || '';
+
+                popup.innerHTML = `
+                    <div class="tap-image-content">
+                        <button class="tap-image-close" onclick="this.closest('.tap-image-popup').remove()">✕</button>
+                        ${imgHtml}
+                        <div class="tap-image-info">
+                            <strong>${titleText}</strong>
+                            <p>${captionText}</p>
+                        </div>
+                        <div class="tap-ask-section">
+                            <p>Iske baare mein jaanna chahte ho?</p>
+                            <div class="tap-ask-buttons">
+                                <button class="tap-yes-btn" onclick="tapExplain('${popupId}', '${titleText.replace(/'/g, "\\'")}')">Ha, batao</button>
+                                <button class="tap-no-btn" onclick="this.closest('.tap-image-popup').remove()">Nahi</button>
                             </div>
                         </div>
-                    `;
-                } else {
-                    popup.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--text-light);">Image nahi mili "<b>${text.substring(0, 40)}</b>" ki</div>`;
-                    setTimeout(() => popup.remove(), 2000);
-                }
+                        <div class="tap-explain-area" id="${popupId}" style="display:none;"></div>
+                    </div>
+                `;
             } catch(e) {
                 popup.remove();
             }
         });
     });
+}
+
+// ===== Tap Explain (Ha, batao) =====
+async function tapExplain(popupId, topic) {
+    const area = document.getElementById(popupId);
+    if (!area) return;
+
+    area.style.display = 'block';
+    area.innerHTML = `<div class="tap-loading"><div class="spinner" style="width:25px;height:25px;border-width:3px;"></div> Samjha raha hoon...</div>`;
+
+    try {
+        const res = await fetch('/api/doubt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                topic: currentTopic,
+                question: `"${topic}" ke baare mein detail mein samjhao. Kya hai, kyun important hai RPSC exam ke liye, key facts batao.`,
+                language: selectedLang || 'Hinglish'
+            })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            const explainId = 'tapexp_' + Date.now();
+            area.innerHTML = `
+                <div class="tap-explain-content" id="${explainId}">
+                    ${marked.parse(data.result)}
+                </div>
+                <div class="tap-explain-actions">
+                    <button class="doubt-speak-btn" onclick="speakDoubt('${explainId}', this)">&#128266; Suniye</button>
+                </div>
+            `;
+        } else {
+            area.innerHTML = `<p class="error-msg" style="padding:0.5rem;">Error: ${data.error}</p>`;
+        }
+    } catch(e) {
+        area.innerHTML = `<p class="error-msg" style="padding:0.5rem;">Server se connect nahi ho paya!</p>`;
+    }
 }
 
 // ===== Quick Doubt (Tutor Actions) =====
