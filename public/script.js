@@ -307,10 +307,10 @@ const timerDisplay = document.getElementById('timerDisplay');
 // ===== Build Sidebar =====
 function buildSidebar() {
     let html = '';
-    syllabus.forEach((paper) => {
+    syllabus.forEach((paper, paperIdx) => {
         html += `<div class="nav-paper">${paper.paper}</div>`;
         paper.categories.forEach((cat, catIdx) => {
-            const catId = `cat-${paper.paper.substring(0,7).replace(/\s/g,'')}-${catIdx}`;
+            const catId = `cat-p${paperIdx}-${catIdx}`;
             html += `<div class="nav-category" data-target="${catId}">
                 <span>${cat.name}</span><span class="arrow">&#9654;</span>
             </div>`;
