@@ -433,6 +433,7 @@ async function loadNotes() {
         notesContent.innerHTML = marked.parse(notesCache[cacheKey]);
         document.getElementById('doubtSection').style.display = 'block';
         document.getElementById('notesToolbar').style.display = 'flex';
+        makeTappableNotes();
         loadYouTubeVideos();
         return;
     }
@@ -461,6 +462,7 @@ async function loadNotes() {
             document.getElementById('doubtSection').style.display = 'block';
             document.getElementById('notesToolbar').style.display = 'flex';
             injectImagesInNotes();
+            makeTappableNotes();
         } else {
             notesContent.innerHTML = `<p class="error-msg">Error: ${data.error}</p>`;
         }
@@ -811,20 +813,58 @@ async function askDoubt() {
     doubtLoading.style.display = 'block';
 
     try {
-        const res = await fetch('/api/doubt', {
+        // Load doubt answer + image in parallel
+        const doubtPromise = fetch('/api/doubt', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ topic: currentTopic, question, language: selectedLang })
         });
+
+        const imgPromise = fetch('/api/topic-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic: question })
+        }).catch(() => null);
+
+        const [res, imgRes] = await Promise.all([doubtPromise, imgPromise]);
         const data = await res.json();
+        let doubtImages = [];
+        try {
+            if (imgRes && imgRes.ok) {
+                const imgData = await imgRes.json();
+                doubtImages = imgData.images || [];
+            }
+        } catch(e) {}
+
         doubtLoading.style.display = 'none';
 
         if (res.ok) {
+            const doubtId = 'doubt_' + Date.now();
             const doubtItem = document.createElement('div');
             doubtItem.className = 'doubt-item';
+
+            // Build images HTML for doubt
+            let imagesHtml = '';
+            if (doubtImages.length > 0) {
+                imagesHtml = '<div class="doubt-images">';
+                doubtImages.slice(0, 3).forEach(img => {
+                    imagesHtml += `
+                        <div class="doubt-img-card">
+                            <img src="${img.url}" alt="${img.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
+                            <div class="doubt-img-label"><strong>${img.title}</strong><br>${img.caption || ''}</div>
+                        </div>
+                    `;
+                });
+                imagesHtml += '</div>';
+            }
+
             doubtItem.innerHTML = `
                 <div class="doubt-question">Q: ${question}</div>
-                <div class="doubt-answer">${marked.parse(data.result)}</div>
+                <div class="doubt-answer" id="${doubtId}">${marked.parse(data.result)}</div>
+                ${imagesHtml}
+                <div class="doubt-actions">
+                    <button class="doubt-speak-btn" onclick="speakDoubt('${doubtId}', this)">&#128266; Suniye</button>
+                </div>
             `;
             doubtHistory.prepend(doubtItem);
         } else {
@@ -834,6 +874,42 @@ async function askDoubt() {
         doubtLoading.style.display = 'none';
         alert('Server se connect nahi ho paya!');
     }
+}
+
+// Speak doubt answer
+function speakDoubt(id, btn) {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    if (btn.classList.contains('speaking')) {
+        speechSynthesis.cancel();
+        btn.classList.remove('speaking');
+        btn.innerHTML = '&#128266; Suniye';
+        return;
+    }
+
+    const text = el.innerText;
+    const chunks = splitTextToChunks(text);
+    let chunkIdx = 0;
+
+    btn.classList.add('speaking');
+    btn.innerHTML = '&#128266; Bol raha hai...';
+
+    function speakNext() {
+        if (chunkIdx >= chunks.length || !btn.classList.contains('speaking')) {
+            btn.classList.remove('speaking');
+            btn.innerHTML = '&#128266; Suniye';
+            return;
+        }
+        const utt = new SpeechSynthesisUtterance(chunks[chunkIdx]);
+        const voice = getVoice();
+        if (voice) utt.voice = voice;
+        utt.rate = 0.95;
+        utt.onend = () => { chunkIdx++; speakNext(); };
+        utt.onerror = () => { chunkIdx++; speakNext(); };
+        speechSynthesis.speak(utt);
+    }
+    speakNext();
 }
 
 // ===== Load Topic Image =====
@@ -1032,6 +1108,73 @@ if (speechSynthesis.onvoiceschanged !== undefined) {
 }
 // Also try loading immediately
 speechSynthesis.getVoices();
+
+// ===== Tap-to-see-image in Notes =====
+function makeTappableNotes() {
+    const notesEl = document.getElementById('notesContent');
+    if (!notesEl) return;
+
+    // Make all strong/bold text, list items, and headings tappable
+    const tappableElements = notesEl.querySelectorAll('strong, li, h2, h3');
+
+    tappableElements.forEach(el => {
+        // Skip if already made tappable
+        if (el.dataset.tappable) return;
+        el.dataset.tappable = 'true';
+        el.classList.add('tappable-text');
+
+        el.addEventListener('click', async (e) => {
+            e.stopPropagation();
+
+            // Remove any existing tap-image popups
+            document.querySelectorAll('.tap-image-popup').forEach(p => p.remove());
+
+            const text = el.innerText.trim();
+            if (text.length < 3 || text.length > 100) return;
+
+            // Show loading indicator
+            const popup = document.createElement('div');
+            popup.className = 'tap-image-popup';
+            popup.innerHTML = `<div class="tap-image-loading"><div class="spinner" style="width:30px;height:30px;border-width:3px;"></div><p>${text}</p></div>`;
+            el.after(popup);
+
+            try {
+                const res = await fetch('/api/topic-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic: text })
+                });
+                const data = await res.json();
+
+                if (data.images && data.images.length > 0) {
+                    const img = data.images[0];
+                    popup.innerHTML = `
+                        <div class="tap-image-content">
+                            <button class="tap-image-close" onclick="this.closest('.tap-image-popup').remove()">✕</button>
+                            <img src="${img.url}" alt="${img.title}" onerror="this.closest('.tap-image-popup').innerHTML='<p class=\\'error-msg\\'>Image nahi mili</p>'">
+                            <div class="tap-image-info">
+                                <strong>${img.title}</strong>
+                                <p>${img.caption || ''}</p>
+                            </div>
+                        </div>
+                    `;
+                } else if (data.imageUrl) {
+                    popup.innerHTML = `
+                        <div class="tap-image-content">
+                            <button class="tap-image-close" onclick="this.closest('.tap-image-popup').remove()">✕</button>
+                            <img src="${data.imageUrl}" alt="${text}">
+                            <div class="tap-image-info"><strong>${text}</strong></div>
+                        </div>
+                    `;
+                } else {
+                    popup.remove();
+                }
+            } catch(e) {
+                popup.remove();
+            }
+        });
+    });
+}
 
 // ===== Quick Doubt (Tutor Actions) =====
 function askQuickDoubt(question) {
