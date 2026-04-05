@@ -247,6 +247,92 @@ Return ONLY a JSON array, nothing else:
   }
 });
 
+// ===== QUICK IMAGE (fast, no Gemini) =====
+app.post("/api/quick-image", async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: "Text is required" });
+
+    const cacheKey = `qimg_${text}`;
+    if (serverCache[cacheKey]) {
+      return res.json(serverCache[cacheKey]);
+    }
+
+    // Clean text - remove Hindi parts after dash, keep English/key term
+    let searchText = text.replace(/[-–].*$/, '').replace(/[^\w\s\u0900-\u097F]/g, '').trim();
+
+    // Try multiple Wikipedia searches
+    const searches = [
+      searchText,
+      searchText.split(' ').slice(0, 3).join(' '),
+    ];
+
+    let result = { imageUrl: null, title: '', caption: '' };
+
+    for (const query of searches) {
+      if (result.imageUrl) break;
+      try {
+        // Wikipedia search API to find the right article
+        const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=3&format=json`;
+        const searchRes = await fetch(searchUrl, { headers: { "User-Agent": "RPSCApp/1.0" } });
+        const searchData = await searchRes.json();
+
+        if (searchData.query?.search) {
+          for (const article of searchData.query.search) {
+            if (result.imageUrl) break;
+            try {
+              const summaryRes = await fetch(
+                `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(article.title)}`,
+                { headers: { "User-Agent": "RPSCApp/1.0" } }
+              );
+              const summaryData = await summaryRes.json();
+
+              if (summaryData.originalimage?.source || summaryData.thumbnail?.source) {
+                result = {
+                  imageUrl: summaryData.originalimage?.source || summaryData.thumbnail.source.replace(/\/\d+px-/, '/600px-'),
+                  title: summaryData.title || query,
+                  caption: summaryData.description || ''
+                };
+              }
+            } catch(e) {}
+          }
+        }
+      } catch(e) {}
+    }
+
+    // Try Hindi Wikipedia if English didn't work
+    if (!result.imageUrl) {
+      try {
+        const hiSearchUrl = `https://hi.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchText)}&srlimit=2&format=json`;
+        const hiRes = await fetch(hiSearchUrl, { headers: { "User-Agent": "RPSCApp/1.0" } });
+        const hiData = await hiRes.json();
+
+        if (hiData.query?.search?.[0]) {
+          const title = hiData.query.search[0].title;
+          const summaryRes = await fetch(
+            `https://hi.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+            { headers: { "User-Agent": "RPSCApp/1.0" } }
+          );
+          const summaryData = await summaryRes.json();
+          if (summaryData.originalimage?.source || summaryData.thumbnail?.source) {
+            result = {
+              imageUrl: summaryData.originalimage?.source || summaryData.thumbnail.source.replace(/\/\d+px-/, '/600px-'),
+              title: summaryData.title || searchText,
+              caption: summaryData.description || ''
+            };
+          }
+        }
+      } catch(e) {}
+    }
+
+    serverCache[cacheKey] = result;
+    res.json(result);
+  } catch (error) {
+    console.error("Quick image error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ===== MOCK TEST ENDPOINT =====
 app.post("/api/mocktest", async (req, res) => {
   try {
