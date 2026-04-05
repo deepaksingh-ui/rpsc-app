@@ -1183,6 +1183,10 @@ async function tapExplain(popupId, topic) {
     const area = document.getElementById(popupId);
     if (!area) return;
 
+    // Hide the ask section
+    const askSection = area.closest('.tap-image-content').querySelector('.tap-ask-section');
+    if (askSection) askSection.style.display = 'none';
+
     area.style.display = 'block';
     area.innerHTML = `<div class="tap-loading"><div class="spinner" style="width:25px;height:25px;border-width:3px;"></div> Samjha raha hoon...</div>`;
 
@@ -1200,6 +1204,7 @@ async function tapExplain(popupId, topic) {
 
         if (res.ok) {
             const explainId = 'tapexp_' + Date.now();
+            const chatId = 'tapchat_' + Date.now();
             area.innerHTML = `
                 <div class="tap-explain-content" id="${explainId}">
                     ${marked.parse(data.result)}
@@ -1207,12 +1212,80 @@ async function tapExplain(popupId, topic) {
                 <div class="tap-explain-actions">
                     <button class="doubt-speak-btn" onclick="speakDoubt('${explainId}', this)">&#128266; Suniye</button>
                 </div>
+                <div class="tap-chat-history" id="${chatId}"></div>
+                <div class="tap-chat-input">
+                    <input type="text" placeholder="Aur kuch puchna hai? Likho yahan..." id="tapInput_${chatId}" onkeypress="if(event.key==='Enter') tapAskMore('${chatId}', '${topic.replace(/'/g, "\\'")}')">
+                    <button onclick="tapAskMore('${chatId}', '${topic.replace(/'/g, "\\'")}')">Pucho</button>
+                </div>
             `;
         } else {
             area.innerHTML = `<p class="error-msg" style="padding:0.5rem;">Error: ${data.error}</p>`;
         }
     } catch(e) {
         area.innerHTML = `<p class="error-msg" style="padding:0.5rem;">Server se connect nahi ho paya!</p>`;
+    }
+}
+
+// ===== Ask more in popup =====
+async function tapAskMore(chatId, topic) {
+    const input = document.getElementById('tapInput_' + chatId);
+    const history = document.getElementById(chatId);
+    if (!input || !history) return;
+
+    const question = input.value.trim();
+    if (!question) return;
+    input.value = '';
+
+    // Show question
+    const qDiv = document.createElement('div');
+    qDiv.className = 'tap-chat-q';
+    qDiv.innerHTML = `<strong>Q:</strong> ${question}`;
+    history.appendChild(qDiv);
+
+    // Show loading
+    const loadDiv = document.createElement('div');
+    loadDiv.className = 'tap-loading';
+    loadDiv.innerHTML = `<div class="spinner" style="width:20px;height:20px;border-width:2px;"></div> Jawab aa raha hai...`;
+    history.appendChild(loadDiv);
+
+    // Scroll to loading
+    history.scrollTop = history.scrollHeight;
+
+    try {
+        const res = await fetch('/api/doubt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                topic: topic,
+                question: question,
+                language: selectedLang || 'Hinglish'
+            })
+        });
+        const data = await res.json();
+        loadDiv.remove();
+
+        if (res.ok) {
+            const ansId = 'tapans_' + Date.now();
+            const aDiv = document.createElement('div');
+            aDiv.className = 'tap-chat-a';
+            aDiv.innerHTML = `
+                <div id="${ansId}">${marked.parse(data.result)}</div>
+                <button class="doubt-speak-btn" onclick="speakDoubt('${ansId}', this)" style="margin-top:6px;">&#128266; Suniye</button>
+            `;
+            history.appendChild(aDiv);
+            history.scrollTop = history.scrollHeight;
+        } else {
+            const errDiv = document.createElement('div');
+            errDiv.className = 'tap-chat-a';
+            errDiv.innerHTML = `<p class="error-msg">Error: ${data.error}</p>`;
+            history.appendChild(errDiv);
+        }
+    } catch(e) {
+        loadDiv.remove();
+        const errDiv = document.createElement('div');
+        errDiv.className = 'tap-chat-a';
+        errDiv.innerHTML = `<p class="error-msg">Server se connect nahi ho paya!</p>`;
+        history.appendChild(errDiv);
     }
 }
 
