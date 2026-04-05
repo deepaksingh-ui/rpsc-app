@@ -845,16 +845,13 @@ async function askDoubt() {
 
             // Build images HTML for doubt (clickable)
             let imagesHtml = '';
+            const doubtImgId = 'dimg_' + Date.now();
             if (doubtImages.length > 0) {
-                imagesHtml = '<div class="doubt-images">';
-                doubtImages.slice(0, 3).forEach(img => {
-                    const safeTitle = (img.title || '').replace(/'/g, "\\'");
-                    const safeCaption = (img.caption || '').replace(/'/g, "\\'");
-                    const safeUrl = (img.url || '').replace(/'/g, "\\'");
+                imagesHtml = `<div class="doubt-images" id="${doubtImgId}">`;
+                doubtImages.slice(0, 3).forEach((img, idx) => {
                     imagesHtml += `
                         <div class="doubt-img-card clickable-image" style="cursor:pointer"
-                            data-img-title="${img.title}" data-img-caption="${img.caption || ''}" data-img-url="${img.url}"
-                            onclick="openImageExplainPopup('${safeTitle}', '${safeCaption}', '${safeUrl}', this)">
+                            data-idx="${idx}">
                             <img src="${img.url}" alt="${img.title}" loading="lazy" onerror="this.parentElement.style.display='none'">
                             <div class="doubt-img-label"><strong>${img.title}</strong><br>${img.caption || ''}<br><span class="click-hint" style="color:var(--primary);">Click karke jaano</span></div>
                         </div>
@@ -872,6 +869,20 @@ async function askDoubt() {
                 </div>
             `;
             doubtHistory.prepend(doubtItem);
+
+            // Attach click listeners to doubt images
+            if (doubtImages.length > 0) {
+                const imgContainer = document.getElementById(doubtImgId);
+                if (imgContainer) {
+                    imgContainer.querySelectorAll('.doubt-img-card').forEach(card => {
+                        const idx = parseInt(card.dataset.idx);
+                        const img = doubtImages[idx];
+                        card.addEventListener('click', () => {
+                            openImageExplainPopup(img.title, img.caption || '', img.url, card);
+                        });
+                    });
+                }
+            }
         } else {
             alert('Error: ' + (data.error || 'Something went wrong'));
         }
@@ -1037,17 +1048,19 @@ function openImageExplainPopup(title, caption, imgUrl, afterEl) {
     popup.className = 'tap-image-popup';
     popup.innerHTML = `
         <div class="tap-image-content">
-            <button class="tap-image-close" onclick="this.closest('.tap-image-popup').remove()">✕</button>
-            <img src="${imgUrl}" alt="${title}" onerror="this.style.display='none'">
+            <button class="tap-image-close tap-close-btn">✕</button>
+            <img src="${imgUrl}" alt="" onerror="this.style.display='none'">
             <div class="tap-image-info">
                 <strong>${title}</strong>
                 <p>${caption}</p>
             </div>
             <div class="tap-explain-area" id="${popupId}" style="display:block;">
-                <div class="tap-loading"><div class="spinner" style="width:25px;height:25px;border-width:3px;"></div> ${title} ke baare mein bata raha hoon...</div>
+                <div class="tap-loading"><div class="spinner" style="width:25px;height:25px;border-width:3px;"></div> Samjha raha hoon...</div>
             </div>
         </div>
     `;
+
+    popup.querySelector('.tap-close-btn').addEventListener('click', () => popup.remove());
     afterEl.after(popup);
     popup.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
@@ -1208,7 +1221,7 @@ function makeTappableNotes() {
 
                 popup.innerHTML = `
                     <div class="tap-image-content">
-                        <button class="tap-image-close" onclick="this.closest('.tap-image-popup').remove()">✕</button>
+                        <button class="tap-image-close tap-close-btn">✕</button>
                         ${imgHtml}
                         <div class="tap-image-info">
                             <strong>${titleText}</strong>
@@ -1217,13 +1230,21 @@ function makeTappableNotes() {
                         <div class="tap-ask-section">
                             <p>Iske baare mein jaanna chahte ho?</p>
                             <div class="tap-ask-buttons">
-                                <button class="tap-yes-btn" onclick="tapExplain('${popupId}', '${titleText.replace(/'/g, "\\'")}')">Ha, batao</button>
-                                <button class="tap-no-btn" onclick="this.closest('.tap-image-popup').remove()">Nahi</button>
+                                <button class="tap-yes-btn" id="yesBtn_${popupId}">Ha, batao</button>
+                                <button class="tap-no-btn tap-close-btn">Nahi</button>
                             </div>
                         </div>
                         <div class="tap-explain-area" id="${popupId}" style="display:none;"></div>
                     </div>
                 `;
+
+                // Add event listeners after innerHTML
+                popup.querySelectorAll('.tap-close-btn').forEach(btn => {
+                    btn.addEventListener('click', () => popup.remove());
+                });
+                document.getElementById('yesBtn_' + popupId).addEventListener('click', () => {
+                    tapExplain(popupId, titleText);
+                });
             } catch(e) {
                 popup.remove();
             }
@@ -1263,14 +1284,25 @@ async function tapExplain(popupId, topic) {
                     ${marked.parse(data.result)}
                 </div>
                 <div class="tap-explain-actions">
-                    <button class="doubt-speak-btn" onclick="speakDoubt('${explainId}', this)">&#128266; Suniye</button>
+                    <button class="doubt-speak-btn" id="spk_${explainId}">&#128266; Suniye</button>
                 </div>
                 <div class="tap-chat-history" id="${chatId}"></div>
                 <div class="tap-chat-input">
-                    <input type="text" placeholder="Aur kuch puchna hai? Likho yahan..." id="tapInput_${chatId}" onkeypress="if(event.key==='Enter') tapAskMore('${chatId}', '${topic.replace(/'/g, "\\'")}')">
-                    <button onclick="tapAskMore('${chatId}', '${topic.replace(/'/g, "\\'")}')">Pucho</button>
+                    <input type="text" placeholder="Aur kuch puchna hai? Likho yahan..." id="tapInput_${chatId}">
+                    <button id="askBtn_${chatId}">Pucho</button>
                 </div>
             `;
+
+            // Attach event listeners properly
+            document.getElementById('spk_' + explainId).addEventListener('click', function() {
+                speakDoubt(explainId, this);
+            });
+            document.getElementById('askBtn_' + chatId).addEventListener('click', () => {
+                tapAskMore(chatId, topic);
+            });
+            document.getElementById('tapInput_' + chatId).addEventListener('keypress', (ev) => {
+                if (ev.key === 'Enter') tapAskMore(chatId, topic);
+            });
         } else {
             area.innerHTML = `<p class="error-msg" style="padding:0.5rem;">Error: ${data.error}</p>`;
         }
@@ -1323,9 +1355,12 @@ async function tapAskMore(chatId, topic) {
             aDiv.className = 'tap-chat-a';
             aDiv.innerHTML = `
                 <div id="${ansId}">${marked.parse(data.result)}</div>
-                <button class="doubt-speak-btn" onclick="speakDoubt('${ansId}', this)" style="margin-top:6px;">&#128266; Suniye</button>
+                <button class="doubt-speak-btn" id="spk_${ansId}" style="margin-top:6px;">&#128266; Suniye</button>
             `;
             history.appendChild(aDiv);
+            document.getElementById('spk_' + ansId).addEventListener('click', function() {
+                speakDoubt(ansId, this);
+            });
             history.scrollTop = history.scrollHeight;
         } else {
             const errDiv = document.createElement('div');
