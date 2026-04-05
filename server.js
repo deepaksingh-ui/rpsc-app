@@ -247,103 +247,120 @@ Return ONLY a JSON array, nothing else:
   }
 });
 
-// ===== QUICK IMAGE (fast, no Gemini) =====
+// ===== QUICK IMAGE (context-aware with Gemini) =====
 app.post("/api/quick-image", async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, context } = req.body;
     if (!text) return res.status(400).json({ error: "Text is required" });
 
-    const cacheKey = `qimg_${text}`;
+    const cacheKey = `qimg_${text}_${context || ''}`;
     if (serverCache[cacheKey]) {
       return res.json(serverCache[cacheKey]);
     }
 
-    // Clean text - remove Hindi parts after dash, keep English/key term
-    let searchText = text.replace(/[-–].*$/, '').replace(/[^\w\s\u0900-\u097F]/g, '').trim();
-
-    // Try multiple Wikipedia searches
-    const searches = [
-      searchText,
-      searchText.split(' ').slice(0, 3).join(' '),
-    ];
-
     let result = { imageUrl: null, title: '', caption: '' };
 
-    for (const query of searches) {
-      if (result.imageUrl) break;
-      try {
-        // Wikipedia search API to find the right article
-        const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=3&format=json`;
-        const searchRes = await fetch(searchUrl, { headers: { "User-Agent": "RPSCApp/1.0" } });
-        const searchData = await searchRes.json();
+    // Step 1: Ask Gemini what this text means in context and get Wikipedia keyword
+    let wikiKeyword = '';
+    let hindiCaption = '';
+    try {
+      const geminiRes = await callGemini(
+        `Student is studying "${context || 'RPSC exam'}" and clicked on this text: "${text}"
 
-        if (searchData.query?.search) {
-          for (const article of searchData.query.search) {
-            if (result.imageUrl) break;
-            try {
-              const summaryRes = await fetch(
-                `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(article.title)}`,
-                { headers: { "User-Agent": "RPSCApp/1.0" } }
-              );
-              const summaryData = await summaryRes.json();
+Tell me:
+1. What exactly this refers to in this context (1 line)
+2. The EXACT English Wikipedia article title to find an image for this
 
-              if (summaryData.originalimage?.source || summaryData.thumbnail?.source) {
-                result = {
-                  imageUrl: summaryData.originalimage?.source || summaryData.thumbnail.source.replace(/\/\d+px-/, '/600px-'),
-                  title: summaryData.title || query,
-                  caption: summaryData.description || ''
-                };
-              }
-            } catch(e) {}
-          }
-        }
-      } catch(e) {}
+Reply in this EXACT JSON format only:
+{"keyword":"English Wikipedia title","caption":"Hindi mein 1 line explanation kya hai ye"}
+
+Example: {"keyword":"Maharana Pratap","caption":"मेवाड़ के महान राजपूत राजा जिन्होंने मुगलों से लड़ाई की"}`
+      );
+      let jsonStr = geminiRes.trim();
+      if (jsonStr.startsWith("```")) {
+        jsonStr = jsonStr.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+      }
+      const parsed = JSON.parse(jsonStr);
+      wikiKeyword = parsed.keyword || '';
+      hindiCaption = parsed.caption || '';
+    } catch(e) {
+      // Fallback: clean text
+      wikiKeyword = text.replace(/[-–].*$/, '').replace(/[^\w\s]/g, '').trim();
     }
 
-    // Try Hindi Wikipedia if English didn't work
-    if (!result.imageUrl) {
+    // Step 2: Search Wikipedia with the correct keyword
+    if (wikiKeyword) {
       try {
-        const hiSearchUrl = `https://hi.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchText)}&srlimit=2&format=json`;
-        const hiRes = await fetch(hiSearchUrl, { headers: { "User-Agent": "RPSCApp/1.0" } });
-        const hiData = await hiRes.json();
-
-        if (hiData.query?.search?.[0]) {
-          const title = hiData.query.search[0].title;
-          const summaryRes = await fetch(
-            `https://hi.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
-            { headers: { "User-Agent": "RPSCApp/1.0" } }
-          );
-          const summaryData = await summaryRes.json();
-          if (summaryData.originalimage?.source || summaryData.thumbnail?.source) {
-            result = {
-              imageUrl: summaryData.originalimage?.source || summaryData.thumbnail.source.replace(/\/\d+px-/, '/600px-'),
-              title: summaryData.title || searchText,
-              caption: summaryData.description || ''
-            };
-          }
-        }
-      } catch(e) {}
-    }
-
-    // Last resort: Ask Gemini for English keyword to search Wikipedia
-    if (!result.imageUrl) {
-      try {
-        const geminiRes = await callGemini(`What is the exact English Wikipedia article title for "${searchText}" in Indian/Rajasthan history/education context? Reply with ONLY the Wikipedia article title, nothing else.`);
-        const wikiTitle = geminiRes.trim().replace(/"/g, '');
         const summaryRes = await fetch(
-          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`,
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiKeyword)}`,
           { headers: { "User-Agent": "RPSCApp/1.0" } }
         );
         const summaryData = await summaryRes.json();
         if (summaryData.originalimage?.source || summaryData.thumbnail?.source) {
           result = {
             imageUrl: summaryData.originalimage?.source || summaryData.thumbnail.source.replace(/\/\d+px-/, '/600px-'),
-            title: summaryData.title || wikiTitle,
-            caption: summaryData.description || ''
+            title: summaryData.title || wikiKeyword,
+            caption: hindiCaption || summaryData.description || ''
           };
         }
       } catch(e) {}
+
+      // Try Wikipedia search if direct didn't work
+      if (!result.imageUrl) {
+        try {
+          const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(wikiKeyword)}&srlimit=3&format=json`;
+          const searchRes = await fetch(searchUrl, { headers: { "User-Agent": "RPSCApp/1.0" } });
+          const searchData = await searchRes.json();
+          if (searchData.query?.search) {
+            for (const article of searchData.query.search) {
+              if (result.imageUrl) break;
+              try {
+                const sRes = await fetch(
+                  `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(article.title)}`,
+                  { headers: { "User-Agent": "RPSCApp/1.0" } }
+                );
+                const sData = await sRes.json();
+                if (sData.originalimage?.source || sData.thumbnail?.source) {
+                  result = {
+                    imageUrl: sData.originalimage?.source || sData.thumbnail.source.replace(/\/\d+px-/, '/600px-'),
+                    title: sData.title || wikiKeyword,
+                    caption: hindiCaption || sData.description || ''
+                  };
+                }
+              } catch(e) {}
+            }
+          }
+        } catch(e) {}
+      }
+
+      // Try Hindi Wikipedia
+      if (!result.imageUrl) {
+        try {
+          const hiSearchUrl = `https://hi.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(wikiKeyword)}&srlimit=2&format=json`;
+          const hiRes = await fetch(hiSearchUrl, { headers: { "User-Agent": "RPSCApp/1.0" } });
+          const hiData = await hiRes.json();
+          if (hiData.query?.search?.[0]) {
+            const title = hiData.query.search[0].title;
+            const sRes = await fetch(
+              `https://hi.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+              { headers: { "User-Agent": "RPSCApp/1.0" } }
+            );
+            const sData = await sRes.json();
+            if (sData.originalimage?.source || sData.thumbnail?.source) {
+              result = {
+                imageUrl: sData.originalimage?.source || sData.thumbnail.source.replace(/\/\d+px-/, '/600px-'),
+                title: sData.title || wikiKeyword,
+                caption: hindiCaption || sData.description || ''
+              };
+            }
+          }
+        } catch(e) {}
+      }
     }
+
+    // Always set caption from Gemini if we have it
+    if (hindiCaption && !result.caption) result.caption = hindiCaption;
+    if (!result.title) result.title = wikiKeyword || text;
 
     serverCache[cacheKey] = result;
     res.json(result);
